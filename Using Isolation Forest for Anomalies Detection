@@ -1,0 +1,45 @@
+# These codes were used to create Isolation Forest model to detect anomalies in a data frame.
+
+## Isolation Forest is uniquely effective for anomaly detection because it focuses on isolating observations rather than profiling "normal" behavior. It works on the principle that anomalies are "few and different," meaning they have rare attribute values that make them stand out. By randomly selecting features and split points to build a forest of decision trees, the algorithm finds that anomalies travel a much shorter path from the root to a leaf node than normal points do. This makes it incredibly efficient for high-dimensional data and large datasets where traditional distance-based methods fail, as it doesn't get bogged down by the "curse of dimensionality." It is the go-to model for financial fraud detection, network intrusion, and system health monitoring, where you need to spot "the needle in the haystack" quickly without needing to understand the complex shape of the haystack itself.
+
+## For this example we will be using UserID as the foreign key which is the primary key from the original dataframe. We will be focusing on finding mismatching on user address information (specifically for Country, State, City and Zipcode)
+
+df = pd.read_csv("original_dataframe.csv")
+
+### To ensure an easier time processing the attribute, the columns of interest are copy into a  new dataframe and assigned to object 'df2'
+cols_of_interest = ['UserID','City_Col','State_Col','Country_Col','Zipcode_Col']
+df2 = df[cols_of_interest].copy()
+df2['Zipcode_Col'] = df2['Zipcode_Col'].astype(str)
+
+### Next we will be using pgecode library to find the latitude and longitude for the Zipcode column
+nomi = pgeocode.Nominatim('my')
+df2['Zipcode_Col'] = df2['Zipcode_Col'].astype(str).str.split('.').str[0].str.zfill(5)
+results = nomi.query_postal_code(df2['Zipcode_Col'].tolist())
+df2['lat'] = results['latitude'].values
+df2['long'] = results['longitude'].values
+df2['Zip_Error'] = df2['lat'].isna().astype(int)
+df2['lat'] = df2['lat'].fillna(0)
+df2['long'] = df2['long'].fillna(0)
+
+### Afterward processing the 'State_Col'. Since it is in string format, we will encode it so Isolation Forest is able to take account the attributes into the calculation
+le = LabelEncoder()
+df2['State_Int'] = le.fit_transform(df2['State_Col'])
+
+## Now we can start processing the model
+
+features = df2[['lat','long','State_Int']].copy()
+features = features.fillna(0)
+
+iso_forest = IsolationForest(contamination=0.01, random_state=42)
+iso_labels = iso_forest.fit_predict(features)
+
+# Isolation Forest: 1 = Normal, -1 = Anomaly
+n_anomalies = (iso_labels == -1).sum()
+iso_noise_pct = (n_anomalies / len(iso_labels)) * 100
+
+# This measures how well the 'Anomalies' are separated from 'Normal' data
+iso_sil = silhouette_score(features, iso_labels)
+
+print(f"Isolation Forest Anomalies: {n_anomalies}") #number of anomallies
+print(f"Isolation Forest Noise %: {iso_noise_pct:.2f}%") #overall noise from the whole dataframe
+print(f"Isolation Forest Silhouette: {iso_sil:.4f}") # the silhouette score for the models
