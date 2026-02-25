@@ -1,0 +1,67 @@
+# These codes were used to create DBSCAN model to detect anomalies in a data frame.
+
+## K-Means detects anomalies by treating "normal" as data that clusters tightly around a central point, or centroid. It works on the assumption that your data is organized into $k$ spherical groups; any data point that falls far outside the radius of its assigned cluster is flagged as an outlier. It is a "distance-based" approach, meaning it relies on the Euclidean distance between a point and its nearest cluster center. This makes K-Means best suited for low-dimensional, numeric datasets where the clusters are relatively uniform in size and shape, such as identifying unusual spending tiers in customer segments or irregularities in standardized sensor readings. However, because it forces every point into a cluster, it can be sensitive to extreme outliers that might "pull" the cluster center away from the actual normal data.
+
+## For this example we will be using UserID as the foreign key which is the primary key from the original dataframe. We will be focusing on finding mismatching on user address information (specifically for Country, State, City and Zipcode)
+
+df = pd.read_csv("original_dataframe.csv")
+
+### To ensure an easier time processing the attribute, the columns of interest are copy into a  new dataframe and assigned to object 'df2'
+cols_of_interest = ['UserID','City_Col','State_Col','Country_Col','Zipcode_Col']
+df2 = df[cols_of_interest].copy()
+df2['Zipcode_Col'] = df2['Zipcode_Col'].astype(str)
+
+### Next we will be using pgecode library to find the latitude and longitude for the Zipcode column
+nomi = pgeocode.Nominatim('my')
+df2['Zipcode_Col'] = df2['Zipcode_Col'].astype(str).str.split('.').str[0].str.zfill(5)
+results = nomi.query_postal_code(df2['Zipcode_Col'].tolist())
+df2['lat'] = results['latitude'].values
+df2['long'] = results['longitude'].values
+df2['Zip_Error'] = df2['lat'].isna().astype(int)
+df2['lat'] = df2['lat'].fillna(0)
+df2['long'] = df2['long'].fillna(0)
+
+### Afterward processing the 'State_Col'. Since it is in string format, we will encode it so DBSCAN is able to take account the attributes into the calculation
+le = LabelEncoder()
+df2['State_Int'] = le.fit_transform(df2['State_Col'])
+
+## Now we can start processing the models
+
+features = df2[['lat','long','State_Int']].copy()
+features = features.fillna(0)
+scaler = StandardScaler()
+features_scaled = scaler.fit_transform(features)
+
+### First we need to know the suitable number of cluster using the Elbow Method Graph
+
+inertia = []
+K_range = range(1, 11)
+
+for k in K_range:
+    kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+    kmeans.fit(features_scaled)
+    inertia.append(kmeans.inertia_)
+
+# Plotting the Elbow Curve
+plt.figure(figsize=(10, 6))
+plt.plot(K_range, inertia, marker='o')
+plt.title('K-Means Elbow Method for Optimal k')
+plt.xlabel('Number of Clusters (k)')
+plt.ylabel('Inertia (Sum of Squared Distances)')
+plt.grid(True)
+plt.show()
+
+### Assuming k=5 is the best value
+optimal_k = 5 
+kmeans_model = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+df2['cluster_kmeans'] = kmeans_model.fit_predict(features_scaled)
+
+distances = kmeans_model.transform(features_scaled)
+min_distances = np.min(distances, axis=1)
+threshold = np.percentile(min_distances, 95) # Top 5% furthest points as anomalies
+
+df2['is_anomaly_kmeans'] = min_distances > threshold
+
+print(f"--- K-Means Results ---")
+print(f"Clusters created: {optimal_k}")
+print(f"Anomalies detected (Top 5%): {df2['is_anomaly_kmeans'].sum()}")
