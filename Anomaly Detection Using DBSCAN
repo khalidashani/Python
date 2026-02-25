@@ -1,1 +1,12 @@
-## These codes were used to create DBSCAN model to detect anomalies in a data frame.
+# These codes were used to create DBSCAN model to detect anomalies in a data frame.
+
+## DBSCAN is exceptionally good at anomaly detection because it defines "normal" as any region with high point density ,allowing it to naturally isolate outliers as noise if they reside in low-density "vacuums." Unlike algorithms that assume data is grouped in neat circles, DBSCAN can follow complex, winding, or non-linear patterns, making it ideal for spatial data, GPS tracking, and sensor networks where anomalies don't just differ in value, but in their isolation from the crowd. It is particularly powerful because it doesn't require you to guess the number of clusters beforehand; it simply identifies where the "crowd" is and labels everything else as an anomaly, provided your data has a relatively consistent density and isn't overly high-dimensional.
+
+## For this example we will be using UserID as the foreign key which is the primary key from the original dataframe. We will be focusing on finding mismatching on user address information (specifically for Country, State, City and Zipcode)
+
+df = pd.read_csv("original_dataframe.csv")
+
+### To ensure an easier time processing the attribute, the columns of interest are copy into a  new dataframe and assigned to object 'df2'
+cols_of_interest = ['UserID','City_Col','State_Col','Country_Col','Zipcode_Col']
+df2 = df[cols_of_interest].copy()
+df2['zipcode'] = df2['Zipcode_Col'].astype(str)
