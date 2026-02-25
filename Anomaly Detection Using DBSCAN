@@ -9,4 +9,62 @@ df = pd.read_csv("original_dataframe.csv")
 ### To ensure an easier time processing the attribute, the columns of interest are copy into a  new dataframe and assigned to object 'df2'
 cols_of_interest = ['UserID','City_Col','State_Col','Country_Col','Zipcode_Col']
 df2 = df[cols_of_interest].copy()
-df2['zipcode'] = df2['Zipcode_Col'].astype(str)
+df2['Zipcode_Col'] = df2['Zipcode_Col'].astype(str)
+
+### Next we will be using pgecode library to find the latitude and longitude for the Zipcode column
+nomi = pgeocode.Nominatim('my')
+df2['Zipcode_Col'] = df2['Zipcode_Col'].astype(str).str.split('.').str[0].str.zfill(5)
+results = nomi.query_postal_code(df2['Zipcode_Col'].tolist())
+df2['lat'] = results['latitude'].values
+df2['long'] = results['longitude'].values
+df2['Zip_Error'] = df2['lat'].isna().astype(int)
+df2['lat'] = df2['lat'].fillna(0)
+df2['long'] = df2['long'].fillna(0)
+
+### Afterward processing the 'State_Col'. Since it is in string format, we will encode it so DBSCAN is able to take account the attributes into the calculation
+le = LabelEncoder()
+df2['State_Int'] = le.fit_transform(df2['State_Col'])
+
+## Now we can start processing the models
+
+## First we would need the eps value. So get this we would need to construct the K-Distance Graph.
+features = df2[['lat','long','State_Int']].copy()
+features = features.fillna(0)
+scaler = StandardScaler()
+features_scaled = scaler.fit_transform(features)
+
+K = range(1, 11)
+
+for k in K:
+    neighbors = NearestNeighbors(n_neighbors=k)
+    neighbors_fit = neighbors.fit(features_scaled)
+    distances, indices = neighbors_fit.kneighbors(features_scaled)
+
+distances = np.sort(distances[:, k-1], axis=0)
+
+plt.figure(figsize=(10, 6))
+plt.plot(distances)
+plt.title('K-Distance Graph (Elbow Method)')
+plt.ylabel(f'Distance to {k}th Nearest Neighbor (Epsilon)')
+plt.xlabel('Data Points sorted by distance')
+plt.grid(True)
+plt.show()
+
+### Lets assume the EPS value obtained is 0.2
+features = df2[['lat','long','State_Int']].copy()
+features = features.fillna(0)
+scaler = StandardScaler()
+features_scaled = scaler.fit_transform(features)
+
+dbscan = DBSCAN(eps=0.2, min_samples=10)
+clusters = dbscan.fit_predict(features_scaled)
+
+df2['cluster_dbscan'] = clusters
+df2['is_anomaly'] = df2['cluster_dbscan'] == -1
+
+num_anomalies = df2['is_anomaly'].sum()
+print(f"Total rows: {len(df2)}")
+print(f"Anomalies detected: {num_anomalies}")
+print(f"Percentage of anomalies: {(num_anomalies/len(df2))*100:.2f}%")
+
+## The result will show the total row calculated, the number of data consider as anomalies and the percentage of anomalies on the process file
