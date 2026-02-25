@@ -1,4 +1,4 @@
-# These codes were used to create DBSCAN model to detect anomalies in a data frame.
+# These codes were used to create K-Means model to detect anomalies in a data frame.
 
 ## K-Means detects anomalies by treating "normal" as data that clusters tightly around a central point, or centroid. It works on the assumption that your data is organized into $k$ spherical groups; any data point that falls far outside the radius of its assigned cluster is flagged as an outlier. It is a "distance-based" approach, meaning it relies on the Euclidean distance between a point and its nearest cluster center. This makes K-Means best suited for low-dimensional, numeric datasets where the clusters are relatively uniform in size and shape, such as identifying unusual spending tiers in customer segments or irregularities in standardized sensor readings. However, because it forces every point into a cluster, it can be sensitive to extreme outliers that might "pull" the cluster center away from the actual normal data.
 
@@ -21,7 +21,7 @@ df2['Zip_Error'] = df2['lat'].isna().astype(int)
 df2['lat'] = df2['lat'].fillna(0)
 df2['long'] = df2['long'].fillna(0)
 
-### Afterward processing the 'State_Col'. Since it is in string format, we will encode it so DBSCAN is able to take account the attributes into the calculation
+### Afterward processing the 'State_Col'. Since it is in string format, we will encode it so K-Means is able to take account the attributes into the calculation
 le = LabelEncoder()
 df2['State_Int'] = le.fit_transform(df2['State_Col'])
 
